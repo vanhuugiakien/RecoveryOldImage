@@ -504,6 +504,7 @@
 
                                     output_rgba.getValuesAsync().then((output_float32_data) => {
                                         var output_uint8_data = Uint8ClampedArray.from(output_float32_data, (x) => x * 255)
+                                        console.log(output_uint8_data)
                                         this.output.putImageData(new ImageData(output_uint8_data, SIZE, SIZE), 0, 0)
                                         math.endScope()
                                         console.timeEnd('render')

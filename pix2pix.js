@@ -1,36 +1,40 @@
 var fs = require("fs");
-var dl = require("deeplearn");
+var dl = require("./deeplearn-0.3.15.js");
 const sharp = require("sharp");
+var PNG = require("png-js");
+PNG2 = require("pngjs2").PNG;
 
 async function main() {
     fetch_weights("./model/model.h5").then(
         async(weights) => {
             // console.log(weights);
 
-            var input_uint8_data = new Uint8ClampedArray(
-                await sharp(fs.readFileSync("a.png")).resize({ height: 256, width: 256, fit: "fill" }).png().toBuffer()
-            );
+            var input_uint8_data = new Uint8ClampedArray(fs.readFileSync("a.png"));
 
-            console.log(input_uint8_data);
-            var input_float32_data = Float32Array.from(
-                input_uint8_data,
-                (x) => x / 255
-            );
-            console.log(input_float32_data);
+            const byteData = await new Promise((resolve, reject) => {
+                PNG.decode("a.png", function(pixels) {
+                    resolve(pixels);
+                });
+            });
+
+            // console.log(input_uint8_data.length);
+            var input_float32_data = Float32Array.from(byteData, (x) => x / 255);
+            // console.log(input_float32_data);
 
             console.time("render");
             const math = dl.ENV.math;
             math.startScope();
+
             var input_rgba = dl.Array3D.new(
                 [256, 256, 4],
                 input_float32_data,
                 "float32"
             );
             var input_rgb = math.slice3D(input_rgba, [0, 0, 0], [256, 256, 3]);
-
             var output_rgb = model(input_rgb, weights);
 
             var alpha = dl.Array3D.ones([256, 256, 1]);
+
             var output_rgba = math.concat3D(output_rgb, alpha, 2);
 
             output_rgba.getValuesAsync().then((output_float32_data) => {
@@ -38,22 +42,17 @@ async function main() {
                     output_float32_data,
                     (x) => x * 255
                 );
-                this.output.putImageData(
-                    new ImageData(output_uint8_data, 256, 256),
-                    0,
-                    0
-                );
+                var img_width = 256;
+                var img_height = 256;
+
+                var img_png = new PNG2({ width: img_width, height: img_height });
+                img_png.data = Buffer.from(output_uint8_data);
+                img_png.pack().pipe(fs.createWriteStream("tick.png"));
                 math.endScope();
                 console.timeEnd("render");
-                request_in_progress = false;
             });
         },
-        (e) => {
-            this.last_failure = e;
-            this.progress = null;
-            request_in_progress = false;
-            update();
-        }
+        (e) => {}
     );
 }
 var weights_cache = {};
@@ -140,16 +139,12 @@ function model(input, weights) {
         var biased = math.add(convolved, bias);
         return biased;
     }
-
     var preprocessed_input = preprocess(input);
-
     var layers = [];
-
     var filter = weights["generator/encoder_1/conv2d/kernel"];
     var bias = weights["generator/encoder_1/conv2d/bias"];
     var convolved = conv2d(preprocessed_input, filter, bias);
     layers.push(convolved);
-
     for (var i = 2; i <= 8; i++) {
         var scope = "generator/encoder_" + i.toString();
         var filter = weights[scope + "/conv2d/kernel"];
@@ -185,7 +180,6 @@ function model(input, weights) {
         // missing dropout
         layers.push(normalized);
     }
-
     var layer_input = math.concat3D(layers[layers.length - 1], layers[0], 2);
     var rectified = math.relu(layer_input);
     var filter = weights["generator/decoder_1/conv2d_transpose/kernel"];
@@ -193,9 +187,7 @@ function model(input, weights) {
     var convolved = deconv2d(rectified, filter, bias);
     var rectified = math.tanh(convolved);
     layers.push(rectified);
-
     var output = layers[layers.length - 1];
     var deprocessed_output = deprocess(output);
-
     return deprocessed_output;
 }

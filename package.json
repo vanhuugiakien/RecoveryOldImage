@@ -1,6 +1,8 @@
 {
   "dependencies": {
     "deeplearn": "^0.5.1",
+    "png-js": "^1.0.0",
+    "pngjs2": "^2.0.0",
     "sharp": "^0.29.3",
     "xhr2": "^0.2.1"
   }
