@@ -1,67 +1,76 @@
-var fs = require("fs");
-var dl = require("./deeplearn-0.3.15.js");
+const fs = require("fs");
+const dl = require("./deeplearn-0.3.15");
+const PNG = require("png-js");
+const PNG2 = require("pngjs2").PNG;
 const sharp = require("sharp");
-var PNG = require("png-js");
-PNG2 = require("pngjs2").PNG;
+const imageToBase64 = require("image-to-base64");
 
-async function main() {
-    fetch_weights("./model/model.h5").then(
+let process = function(res) {
+    console.log("start");
+    fetchWeights("./model/model.h5").then(
         async(weights) => {
             // console.log(weights);
+            const SIZE = 256;
+            // var input_uint8_data = new Uint8ClampedArray();
+            let buffer = fs.readFileSync("process.png");
+            let imgResized = await sharp(buffer).resize(SIZE, SIZE).png().toBuffer();
+            // console.log(buffer);
 
-            var input_uint8_data = new Uint8ClampedArray(fs.readFileSync("a.png"));
-
+            fs.writeFileSync("process.png", new Uint8ClampedArray(imgResized));
+            // console.log(path);
             const byteData = await new Promise((resolve, reject) => {
-                PNG.decode("a.png", function(pixels) {
+                PNG.decode("process.png", function(pixels) {
                     resolve(pixels);
                 });
             });
 
             // console.log(input_uint8_data.length);
-            var input_float32_data = Float32Array.from(byteData, (x) => x / 255);
-            // console.log(input_float32_data);
+            var inputFloat32Data = Float32Array.from(byteData, (x) => x / 255);
+            // console.log(inputFloat32Data);
 
             console.time("render");
             const math = dl.ENV.math;
             math.startScope();
 
-            var input_rgba = dl.Array3D.new(
-                [256, 256, 4],
-                input_float32_data,
+            var inputRGBA = dl.Array3D.new(
+                [SIZE, SIZE, 4],
+                inputFloat32Data,
                 "float32"
             );
-            var input_rgb = math.slice3D(input_rgba, [0, 0, 0], [256, 256, 3]);
-            var output_rgb = model(input_rgb, weights);
-
-            var alpha = dl.Array3D.ones([256, 256, 1]);
-
-            var output_rgba = math.concat3D(output_rgb, alpha, 2);
-
-            output_rgba.getValuesAsync().then((output_float32_data) => {
-                var output_uint8_data = Uint8ClampedArray.from(
+            var input_rgb = math.slice3D(inputRGBA, [0, 0, 0], [SIZE, SIZE, 3]);
+            console.log("processing ...");
+            var outputRGB = model(input_rgb, weights);
+            var alpha = dl.Array3D.ones([SIZE, SIZE, 1]);
+            var outputRGBA = math.concat3D(outputRGB, alpha, 2);
+            outputRGBA.getValuesAsync().then(async(output_float32_data) => {
+                var outputUint8Data = Uint8ClampedArray.from(
                     output_float32_data,
                     (x) => x * 255
                 );
-                var img_width = 256;
-                var img_height = 256;
-
-                var img_png = new PNG2({ width: img_width, height: img_height });
-                img_png.data = Buffer.from(output_uint8_data);
-                img_png.pack().pipe(fs.createWriteStream("tick.png"));
+                console.log(outputUint8Data);
+                var imgPNG = new PNG2({ width: SIZE, height: SIZE });
+                imgPNG.data = Buffer.from(outputUint8Data);
+                imgPNG
+                    .pack()
+                    .pipe(fs.createWriteStream("result.png"))
+                    .on("close", function() {
+                        // let base64 = await imageToBase64("result.png");
+                        res.sendFile(__dirname + "/result.png");
+                    });
                 math.endScope();
                 console.timeEnd("render");
             });
         },
         (e) => {}
     );
-}
-var weights_cache = {};
-main();
+};
+module.exports = process;
 
-function fetch_weights(path) {
+function fetchWeights(path) {
+    let weightsCache = {};
     return new Promise(function(resolve, reject) {
-        if (path in weights_cache) {
-            resolve(weights_cache[path]);
+        if (path in weightsCache) {
+            resolve(weightsCache[path]);
             return;
         }
 
@@ -94,7 +103,7 @@ function fetch_weights(path) {
             weights[shapes[i].name] = dlarr.reshape(shape);
             offset += size;
         }
-        weights_cache[path] = weights;
+        weightsCache[path] = weights;
         resolve(weights);
     });
 }

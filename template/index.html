@@ -14,7 +14,7 @@
     <div>facades</div>
     <div id="facades"></div>
 
-    <script src="deeplearn-0.3.15.js"></script>
+    <script src="../deeplearn-0.3.15.js"></script>
     <script>
         var editor_background = new Image()
         editor_background.src = "editor.png"
@@ -35,7 +35,7 @@
 
             create_editor({
                 name: "edges2cats",
-                weights_url: "/model/model.h5",
+                weights_url: "../model/model.h5",
                 mode: "line",
                 clear: "#FFFFFF",
                 colors: {
@@ -43,8 +43,8 @@
                     eraser: "#ffffff",
                 },
                 draw: "#000000",
-                initial_input: "/a.png",
-                initial_output: "/edges2cats-output.png",
+                initial_input: "./edges2cats-output.png",
+                initial_output: "./edges2cats-output.png",
                 sheet_url: "/edges2cats-sheet.jpg",
             })
 
